@@ -18,14 +18,3 @@ func (*OrderService) Confirm(orderId string) error {
 func (*OrderService) Cancel(orderId string) error {
 	return nil
 }
-
-// OrderRepository implements IOrderRepository.
-type OrderRepository struct{}
-
-func (*OrderRepository) Save(order Order) error {
-	return nil
-}
-
-func (*OrderRepository) FindById(orderId string) (Order, error) {
-	return Order{}, nil
-}

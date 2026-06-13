@@ -22,14 +22,3 @@ func (*ShippingService) Deliver(shippingId string) error {
 func (*ShippingService) Cancel(shippingId string) error {
 	return nil
 }
-
-// ShippingRepository implements IShippingRepository.
-type ShippingRepository struct{}
-
-func (*ShippingRepository) Save(shipping Shipping) error {
-	return nil
-}
-
-func (*ShippingRepository) FindById(shippingId string) (Shipping, error) {
-	return Shipping{}, nil
-}

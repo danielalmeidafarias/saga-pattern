@@ -22,22 +22,3 @@ func (*PaymentService) Cancel(paymentId string) error {
 func (*PaymentService) Refund(paymentId string) error {
 	return nil
 }
-
-// PaymentRepository implements IPaymentRepository.
-type PaymentRepository struct{}
-
-func (*PaymentRepository) Save(payment Payment) error {
-	return nil
-}
-
-func (*PaymentRepository) FindById(paymentId string) (Payment, error) {
-	return Payment{}, nil
-}
-
-func (*PaymentRepository) SaveRefund(refund Refund) error {
-	return nil
-}
-
-func (*PaymentRepository) FindRefundById(refundId string) (Refund, error) {
-	return Refund{}, nil
-}

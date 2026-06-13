@@ -29,11 +29,6 @@ type IOderService interface {
 	Cancel(orderId string) error
 }
 
-type IOrderRepository interface {
-	Save(order Order) error
-	FindById(orderId string) (Order, error)
-}
-
 // ──────────────────────────────────────────────
 // Payment
 // ──────────────────────────────────────────────
@@ -85,13 +80,6 @@ type IPaymentService interface {
 	Refund(paymentId string) error
 }
 
-type IPaymentRepository interface {
-	Save(payment Payment) error
-	FindById(paymentId string) (Payment, error)
-	SaveRefund(refund Refund) error
-	FindRefundById(refundId string) (Refund, error)
-}
-
 // ──────────────────────────────────────────────
 // Inventory
 // ──────────────────────────────────────────────
@@ -111,11 +99,6 @@ type IInventoryService interface {
 	Create(inventoryId string, stock int) (Inventory, error)
 	Get(inventoryId string) (Inventory, error)
 	Update(inventoryId string, stock int, virtualStock int) error
-}
-
-type IInventoryRepository interface {
-	Save(inventory Inventory) error
-	FindById(inventoryId string) (Inventory, error)
 }
 
 // ──────────────────────────────────────────────
@@ -147,7 +130,6 @@ type IShippingService interface {
 	Cancel(shippingId string) error
 }
 
-type IShippingRepository interface {
-	Save(shipping Shipping) error
-	FindById(shippingId string) (Shipping, error)
+type UseCase interface {
+	Run()
 }
