@@ -1,49 +1,47 @@
 package main
 
-type Saga interface {
-	Run()
-	RollBack()
-	AddStep(step ISagaStep) error
-}
-
 type ISagaStep interface {
-	Run() error
 	RollBack() error
-	// MaxRetries() int
-	// RetryCount() int
 }
 
-type SagaOrchestrator struct {
-	SagaList   []ISagaStep
-	FailedStep int
+type SagaStepRollbackFunc func(args ...any) error
+
+type SagaStep struct {
+	rollbackFunc SagaStepRollbackFunc
 }
 
-func (sg *SagaOrchestrator) AddStep(saga ISagaStep) {
+func (s SagaStep) RollBack() error {
+	return s.rollbackFunc()
+}
+
+func NewSagaStep(rollbackFunc SagaStepRollbackFunc) SagaStep {
+	return SagaStep{
+		rollbackFunc: rollbackFunc,
+	}
+}
+
+type RollbackOrchestrator struct {
+	SagaList []ISagaStep
+}
+
+func NewRollbackOrchestrator() RollbackOrchestrator {
+	return RollbackOrchestrator{}
+}
+
+func (sg RollbackOrchestrator) AddStep(saga ISagaStep) {
 	sg.SagaList = append(sg.SagaList, saga)
 }
 
-type SagaRollbackError struct {
-	Err        error
-	FailedStep ISagaStep
-}
-
-func (sg *SagaOrchestrator) RollBack() *SagaRollbackError {
-	if len(sg.SagaList) == 0 || sg.FailedStep == 0 {
+func (sg RollbackOrchestrator) RollBack() error {
+	if len(sg.SagaList) == 0 {
 		return nil
 	}
 
-	s := sg.SagaList[:sg.FailedStep]
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
+	for i := len(sg.SagaList) - 1; i >= 0; i-- {
+		step := sg.SagaList[i]
 
-	for _, s := range s {
-		err := s.RollBack()
-		if err != nil {
-			return &SagaRollbackError{
-				Err:        err,
-				FailedStep: s,
-			}
+		if err := step.RollBack(); err != nil {
+			return err
 		}
 	}
 

@@ -23,7 +23,7 @@ const (
 )
 
 type IOderService interface {
-	Create(productId string, amount float64) (Order, error)
+	Create(productsId []string, amount float64) (Order, error)
 	Get(orderId string) (Order, error)
 	Confirm(orderId string) error
 	Cancel(orderId string) error
@@ -85,7 +85,14 @@ type IPaymentService interface {
 // ──────────────────────────────────────────────
 
 type Product struct {
-	Id string
+	Id    string
+	Name  string
+	Price float64
+}
+
+type IProductService interface {
+	Create(productId string) (Product, error)
+	Get(productId string) (Product, error)
 }
 
 type Inventory struct {
@@ -96,8 +103,8 @@ type Inventory struct {
 }
 
 type IInventoryService interface {
-	Create(inventoryId string, stock int) (Inventory, error)
-	Get(inventoryId string) (Inventory, error)
+	Create(productId string, stock int) (Inventory, error)
+	Get(productId string) (Inventory, error)
 	Update(inventoryId string, stock int, virtualStock int) error
 }
 
@@ -131,5 +138,5 @@ type IShippingService interface {
 }
 
 type UseCase interface {
-	Run()
+	Run(input interface{}) error
 }
