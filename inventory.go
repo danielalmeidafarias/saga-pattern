@@ -3,14 +3,14 @@ package main
 // InventoryService implements IInventoryService.
 type InventoryService struct{}
 
-func (*InventoryService) Create(inventoryId string, stock int) (Inventory, error) {
+func (*InventoryService) Create(productUUID string, stock int) (Inventory, error) {
 	return Inventory{}, nil
 }
 
-func (*InventoryService) Get(inventoryId string) (Inventory, error) {
+func (*InventoryService) Get(inventoryUUID string) (Inventory, error) {
 	return Inventory{}, nil
 }
 
-func (*InventoryService) Update(inventoryId string, stock int, virtualStock int) error {
+func (*InventoryService) Update(inventoryUUID string, stock int, virtualStock int) error {
 	return nil
 }

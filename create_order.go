@@ -1,95 +1,116 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
 
-type CrateOrderUseCase struct {
+	"github.com/google/uuid"
+)
+
+type CreateOrderUseCase struct {
 	orderService     IOderService
 	productService   IProductService
 	inventoryService IInventoryService
 	paymentService   IPaymentService
 	shippingService  IShippingService
 }
-
-type CreateOrderInputProduct struct {
-	ProductId string
-	Quantity  int
-}
-
 type CreateOrderInput struct {
-	Products    []CreateOrderInputProduct
-	InventoryId string
+	Products      []OrderProduct
+	InventoryUUID string
 }
 
-func (uc *CrateOrderUseCase) Run(in CreateOrderInput) error {
-	rollbackOrchestrator := NewRollbackOrchestrator()
+func NewCreateOrderUseCase(
+	orderService IOderService,
+	productService IProductService,
+	inventoryService IInventoryService,
+	paymentService IPaymentService,
+	shippingService IShippingService,
+) IUseCase[CreateOrderInput] {
+	createOrderUseCase := CreateOrderUseCase{
+		orderService:     orderService,
+		productService:   productService,
+		inventoryService: inventoryService,
+		paymentService:   paymentService,
+		shippingService:  shippingService,
+	}
 
-	var orderProducts []Product
+	return NewUseCaseWithSaga[CreateOrderInput](createOrderUseCase)
+}
+
+func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, error) {
+	sagaOrchestrator := NewSagaOrchestrator()
+
 	for _, p := range in.Products {
-		product, err := uc.productService.Get(p.ProductId)
+		product, err := uc.productService.Get(p.Product.UUID)
 		if err != nil {
-			rollbackOrchestrator.RollBack()
-			return err
+			return &sagaOrchestrator, err
 		}
-		orderProducts = append(orderProducts, product)
 
-		inventory, err := uc.inventoryService.Get(in.InventoryId)
+		inventory, err := uc.inventoryService.Get(in.InventoryUUID)
 		if err != nil {
-			rollbackOrchestrator.RollBack()
-			return err
+			return &sagaOrchestrator, err
 		}
 
 		if inventory.VirtualStock < p.Quantity {
-			rollbackOrchestrator.RollBack()
-			return fmt.Errorf("Requested product quantity not available for product: %s", product.Name)
+			return &sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", product.Name)
 		}
 
-		err = uc.inventoryService.Update(in.InventoryId, inventory.Stock, inventory.VirtualStock-p.Quantity)
-		if err != nil {
-			rollbackOrchestrator.RollBack()
-			return nil
-		}
-
-		rollbackOrchestrator.AddStep(NewSagaStep(
-			func(args ...any) error {
-				return uc.inventoryService.Update(in.InventoryId, inventory.Stock, inventory.VirtualStock)
+		sagaOrchestrator.AddStep(NewSagaStep(
+			func() error {
+				return uc.inventoryService.Update(in.InventoryUUID, inventory.Stock, inventory.VirtualStock-p.Quantity)
+			},
+			func() error {
+				return uc.inventoryService.Update(in.InventoryUUID, inventory.Stock, inventory.VirtualStock)
 			},
 		))
+
 	}
 
-	var productsIds []string
 	var amount float64
-	for _, p := range orderProducts {
-		productsIds = append(productsIds, p.Id)
-		amount += p.Price
+	for _, p := range in.Products {
+		amount += float64(p.Quantity) * p.Product.Price
 	}
 
-	order, err := uc.orderService.Create(productsIds, amount)
-	if err != nil {
-		rollbackOrchestrator.RollBack()
-		return err
-	}
-	rollbackOrchestrator.AddStep(NewSagaStep(
-		func(args ...any) error {
-			return uc.orderService.Cancel(order.Id)
+	paymentUUID := uuid.New().String()
+	sagaOrchestrator.AddStep(
+		NewSagaStep(
+			func() error {
+				return uc.paymentService.Create(paymentUUID, amount)
+			},
+			func() error {
+				return uc.paymentService.Cancel(paymentUUID)
+			},
+		),
+	)
+
+	shippingUUID := uuid.New().String()
+	orderUUID := uuid.New().String()
+
+	sagaOrchestrator.AddStep(
+		NewSagaStep(
+			func() error {
+				return uc.shippingService.Create(shippingUUID, orderUUID)
+			},
+			func() error {
+				return uc.shippingService.Cancel(shippingUUID)
+			},
+		),
+	)
+
+	sagaOrchestrator.AddStep(NewSagaStep(
+		func() error {
+			return uc.orderService.Create(Order{
+				UUID:         orderUUID,
+				Products:     in.Products,
+				Status:       OrderPending,
+				PaymentUUID:  paymentUUID,
+				ShippingUUID: shippingUUID,
+				Amount:       amount,
+			})
+		},
+		func() error {
+			return uc.orderService.Cancel(orderUUID)
 		},
 	))
 
-	payment, err := uc.paymentService.Create(amount)
-	if err != nil {
-		rollbackOrchestrator.RollBack()
-		return err
-	}
-	rollbackOrchestrator.AddStep(NewSagaStep(
-		func(args ...any) error {
-			return uc.paymentService.Cancel(payment.Id)
-		},
-	))
-
-	_, err = uc.shippingService.Create(order.Id)
-	if err != nil {
-		rollbackOrchestrator.RollBack()
-		return err
-	}
-
-	return nil
+	return &sagaOrchestrator, sagaOrchestrator.Run()
 }
