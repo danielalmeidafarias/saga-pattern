@@ -1,8 +1,8 @@
 package main
 
 type SagaStep struct {
+	runFunc      func() error
 	rollbackFunc func() error
-	runcFunc     func() error
 	DidRun       bool
 }
 
@@ -11,13 +11,13 @@ func (s SagaStep) RollBack() error {
 }
 
 func (s SagaStep) Run() error {
-	return s.rollbackFunc()
+	return s.runFunc()
 }
 
-func NewSagaStep(rollbackFunc, runFunc func() error) SagaStep {
+func NewSagaStep(runFunc, rollbackFunc func() error) SagaStep {
 	return SagaStep{
+		runFunc:      runFunc,
 		rollbackFunc: rollbackFunc,
-		runcFunc:     runFunc,
 	}
 }
 
@@ -29,23 +29,23 @@ func NewSagaOrchestrator() SagaOrchestrator {
 	return SagaOrchestrator{}
 }
 
-func (sg SagaOrchestrator) AddStep(saga SagaStep) {
+func (sg *SagaOrchestrator) AddStep(saga SagaStep) {
 	sg.SagaStepList = append(sg.SagaStepList, saga)
 }
 
-func (sg SagaOrchestrator) Run() error {
-	for _, step := range sg.SagaStepList {
-		err := step.Run()
+func (sg *SagaOrchestrator) Run() error {
+	for i := range sg.SagaStepList {
+		err := sg.SagaStepList[i].Run()
 		if err != nil {
 			return err
 		}
 
-		step.DidRun = true
+		sg.SagaStepList[i].DidRun = true
 	}
 	return nil
 }
 
-func (sg SagaOrchestrator) RollBack() error {
+func (sg *SagaOrchestrator) RollBack() error {
 	if len(sg.SagaStepList) == 0 {
 		return nil
 	}

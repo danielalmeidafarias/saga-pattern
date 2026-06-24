@@ -1,0 +1,20 @@
+﻿{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug create_order test",
+			"type": "go",
+			"request": "launch",
+			"mode": "test",
+			"program": "${workspaceFolder}",
+			"args": [
+				"-test.run",
+				"^TestCreateOrderUseCase_Run_RollsBackOnShippingFailure$",
+				"-test.v"
+			],
+			"env": {
+				"GOCACHE": "${workspaceFolder}\\.gocache"
+			}
+		}
+	]
+}
