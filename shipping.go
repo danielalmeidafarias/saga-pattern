@@ -3,22 +3,22 @@ package main
 // ShippingService implements IShippingService.
 type ShippingService struct{}
 
-func (*ShippingService) Create(orderId string) (Shipping, error) {
+func (*ShippingService) Create(orderUUID string) (Shipping, error) {
 	return Shipping{}, nil
 }
 
-func (*ShippingService) Get(shippingId string) (Shipping, error) {
+func (*ShippingService) Get(shippingUUID string) (Shipping, error) {
 	return Shipping{}, nil
 }
 
-func (*ShippingService) Start(shippingId string) error {
+func (*ShippingService) Start(shippingUUID string) error {
 	return nil
 }
 
-func (*ShippingService) Deliver(shippingId string) error {
+func (*ShippingService) Deliver(shippingUUID string) error {
 	return nil
 }
 
-func (*ShippingService) Cancel(shippingId string) error {
+func (*ShippingService) Cancel(shippingUUID string) error {
 	return nil
 }

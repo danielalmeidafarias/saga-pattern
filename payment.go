@@ -7,18 +7,18 @@ func (*PaymentService) Create(amount float64) (Payment, error) {
 	return Payment{}, nil
 }
 
-func (*PaymentService) Get(paymentId string) (Payment, error) {
+func (*PaymentService) Get(paymentUUID string) (Payment, error) {
 	return Payment{}, nil
 }
 
-func (*PaymentService) Process(paymentId string) error {
+func (*PaymentService) Process(paymentUUID string) error {
 	return nil
 }
 
-func (*PaymentService) Cancel(paymentId string) error {
+func (*PaymentService) Cancel(paymentUUID string) error {
 	return nil
 }
 
-func (*PaymentService) Refund(paymentId string) error {
+func (*PaymentService) Refund(paymentUUID string) error {
 	return nil
 }

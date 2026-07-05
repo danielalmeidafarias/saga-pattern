@@ -3,18 +3,18 @@ package main
 // OrderService implements IOderService.
 type OrderService struct{}
 
-func (*OrderService) Create(productId string, amount float64) (Order, error) {
+func (*OrderService) Create(order Order) (Order, error) {
 	return Order{}, nil
 }
 
-func (*OrderService) Get(orderId string) (Order, error) {
+func (*OrderService) Get(orderUUID string) (Order, error) {
 	return Order{}, nil
 }
 
-func (*OrderService) Confirm(orderId string) error {
+func (*OrderService) Confirm(orderUUID string) error {
 	return nil
 }
 
-func (*OrderService) Cancel(orderId string) error {
+func (*OrderService) Cancel(orderUUID string) error {
 	return nil
 }

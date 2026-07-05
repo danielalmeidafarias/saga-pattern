@@ -1,4 +1,4 @@
-# Binaries
+﻿# Binaries
 *.exe
 *.exe~
 *.dll
@@ -15,7 +15,10 @@ coverage.*
 go.work
 go.work.sum
 
+# Local debug/cache
+.gocache/
+.claude/
+
 # Editor / OS
 .idea/
-.vscode/
 .DS_Store
