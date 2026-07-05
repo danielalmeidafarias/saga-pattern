@@ -36,6 +36,22 @@ func NewCreateOrderUseCase(
 	return NewUseCaseWithSaga[CreateOrderInput](createOrderUseCase)
 }
 
+/*
+Saga v2 - Nesse modelo, cada passo do processo e adicionado com a funcao compensadora e sao executados automaticamente, sequencialmente.
+O usecase implementa a funcao runFunc que retorna o orchestrador do saga.
+O tipo UseCaseWithSaga e responsavel por executar o orchestrador de saga, e caso tenha erro, ele executa os rollbacks automaticamente.
+
+Nesse formato de saga, cada passo do processo e adicionado com a funcao compensadora e sao executados automaticamente, sequencialmente.
+Para funcionar, os ids devem ser gerados antes da execucao para permitir que funcoes rollback sejam definidas
+- Pontos positivos: Mais simplicidade de implementacao e automacao do processo de rollback
+- Pontos negativos: Menos flexibilidade, menor controle do fluxo de execucao, e nao permite que execucoes de rollback dependam das funcoes principais.
+
+Para integracoes externas, talvez seja impossivel de implementar, visto que os rollbacks normalmente dependem de ids gerados nas APIs/Bancos de dados externos.
+Mas, para sistemas de API's internas, provavelmente esse modelo e possivel
+
+Outra solucao talvez seja a adicao de outro servico de orquestracao que iria de fato lidar com essa orchestracao de rollbacks
+Enquanto nosso servico iria simplesmente gravar ids das tarefas que poderiam ser compensadas futuramente. Por exemplo, um servico de filas
+*/
 func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, error) {
 	sagaOrchestrator := NewSagaOrchestrator()
 

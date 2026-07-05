@@ -1,7 +1,5 @@
 package main
 
-import "errors"
-
 // UUID is service-to-service reference. Id stays local/internal.
 
 // Order
@@ -29,6 +27,13 @@ const (
 	OrderCanceled
 	OrderFailed
 )
+
+type IOderServiceV1 interface {
+	Create(order Order) (string, error)
+	Get(orderUUID string) (Order, error)
+	Confirm(orderUUID string) error
+	Cancel(orderUUID string) error
+}
 
 type IOderService interface {
 	Create(order Order) error
@@ -89,6 +94,14 @@ type IPaymentService interface {
 	Refund(paymentUUID string) error
 }
 
+type IPaymentServiceV1 interface {
+	Create(amount float64) (string, error)
+	Get(paymentUUID string) (Payment, error)
+	Process(paymentUUID string) error
+	Cancel(paymentUUID string) error
+	Refund(paymentUUID string) error
+}
+
 // Inventory
 
 type Product struct {
@@ -137,46 +150,18 @@ const (
 	ShippingFailed
 )
 
-type IShippingService interface {
-	Create(shippingUUID, orderUUID string) error
+type IShippingServiceV1 interface {
+	Create(orderUUID string) (string, error)
 	Get(shippingUUID string) (Shipping, error)
 	Start(shippingUUID string) error
 	Deliver(shippingUUID string) error
 	Cancel(shippingUUID string) error
 }
 
-// UseCase
-type IUseCase[T any] interface {
-	Run(in T) error
-}
-
-type UseCaseWithSagaAbstract[T any] interface {
-	runFunc(in T) (*SagaOrchestrator, error)
-}
-
-type UseCaseWithSaga[T any] struct {
-	abstract UseCaseWithSagaAbstract[T]
-}
-
-func NewUseCaseWithSaga[T any](
-	abstract UseCaseWithSagaAbstract[T],
-) UseCaseWithSaga[T] {
-	return UseCaseWithSaga[T]{
-		abstract: abstract,
-	}
-}
-
-func (uc UseCaseWithSaga[T]) Run(in T) error {
-	sagaOrchestrator, err := uc.abstract.runFunc(in)
-	if err == nil {
-		return nil
-	}
-
-	if sagaOrchestrator != nil {
-		if errRollback := sagaOrchestrator.RollBack(); errRollback != nil {
-			return errors.Join(err, errRollback)
-		}
-	}
-
-	return err
+type IShippingService interface {
+	Create(shippingUUID, orderUUID string) error
+	Get(shippingUUID string) (Shipping, error)
+	Start(shippingUUID string) error
+	Deliver(shippingUUID string) error
+	Cancel(shippingUUID string) error
 }
