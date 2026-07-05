@@ -108,7 +108,7 @@ type CreateOrderSagaOrchestratorInput struct {
 func (sg *CreateOrderSagaOrchestrator) Run(in CreateOrderSagaOrchestratorInput) error {
 	for p, i := range in.InventoryProductMap {
 
-		err := sg.inventoryService.UpdateProduct(i.InventoryUUID, i.ProductUUID, i.Stock, i.VirtualStock-i.Stock-p.Quantity)
+		err := sg.inventoryService.UpdateProduct(i.InventoryUUID, i.ProductUUID, i.Stock, i.VirtualStock-p.Quantity)
 		if err != nil {
 			return err
 		}
