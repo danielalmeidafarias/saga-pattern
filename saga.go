@@ -73,16 +73,22 @@ func (sg *SagaOrchestrator) AddStep(saga SagaStep) {
 
 func (sg *SagaOrchestrator) Run() error {
 	for i := range sg.SagaStepList {
-		err := sg.SagaStepList[i].Run()
-		if err != nil {
-			// Add the failed step to the rollback list
-			// As Step implements IRollbackStep, we can add it directly to the RollbackStepList
-			sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(sg.SagaStepList[i].rollbackFunc))
+		step := sg.SagaStepList[i]
+
+		if err := step.Run(); err != nil {
 			return err
 		}
 
 		sg.SagaStepList[i].DidRun = true
+
+		// Add the failed step to the rollback list
+		// As Step implements IRollbackStep, we can add it directly to the RollbackStepList
+		sg.RollbackStepList = append(
+			sg.RollbackStepList,
+			NewRollBackStep(step.rollbackFunc),
+		)
 	}
+
 	return nil
 }
 
