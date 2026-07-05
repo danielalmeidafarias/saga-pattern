@@ -38,38 +38,18 @@ func NewCreateOrderUseCasev1(
 }
 
 func (uc CreateOrderUseCasev1) Run(in CreateOrderInputv1) error {
-	if _, err := uc.inventoryService.Get(in.InventoryUUID); err != nil {
-		return err
-	}
-
-	requestedQuantities := map[string]int{}
+	var inventoryProductList = make(map[OrderProduct]InventoryProduct)
 	for _, p := range in.Products {
-		requestedQuantities[p.Product.UUID] += p.Quantity
-	}
-
-	inventoryProducts := map[string]InventoryProduct{}
-	validatedProducts := map[string]struct{}{}
-	for _, p := range in.Products {
-		if _, ok := validatedProducts[p.Product.UUID]; ok {
-			continue
-		}
-		validatedProducts[p.Product.UUID] = struct{}{}
-
-		product, err := uc.productService.Get(p.Product.UUID)
-		if err != nil {
-			return err
-		}
-
 		inventoryProduct, err := uc.inventoryService.GetProduct(in.InventoryUUID, p.Product.UUID)
 		if err != nil {
 			return err
 		}
 
-		if inventoryProduct.VirtualStock < requestedQuantities[p.Product.UUID] {
-			return fmt.Errorf("Requested product quantity not available for product: %s", product.Name)
+		if inventoryProduct.VirtualStock < p.Quantity {
+			return fmt.Errorf("Requested product quantity not available for product: %s", p.Product.Name)
 		}
 
-		inventoryProducts[p.Product.UUID] = inventoryProduct
+		inventoryProductList[p] = inventoryProduct
 	}
 
 	var amount float64
@@ -85,10 +65,9 @@ func (uc CreateOrderUseCasev1) Run(in CreateOrderInputv1) error {
 	)
 
 	err := sagaOrchestrator.Run(CreateOrderSagaOrchestratorInput{
-		Amount:            amount,
-		InventoryUUID:     in.InventoryUUID,
-		InventoryProducts: inventoryProducts,
-		Products:          in.Products,
+		Amount:              amount,
+		InventoryProductMap: inventoryProductList,
+		Products:            in.Products,
 	})
 	if err != nil {
 		sagaOrchestrator.RollBack()
@@ -121,45 +100,21 @@ func NewCreateOrderSagaOrchestrator(
 }
 
 type CreateOrderSagaOrchestratorInput struct {
-	Amount            float64
-	InventoryUUID     string
-	InventoryProducts map[string]InventoryProduct
-	Products          []OrderProduct
+	Amount              float64
+	InventoryProductMap map[OrderProduct]InventoryProduct
+	Products            []OrderProduct
 }
 
 func (sg *CreateOrderSagaOrchestrator) Run(in CreateOrderSagaOrchestratorInput) error {
-	requestedQuantities := map[string]int{}
-	for _, p := range in.Products {
-		requestedQuantities[p.Product.UUID] += p.Quantity
-	}
+	for p, i := range in.InventoryProductMap {
 
-	updatedProducts := map[string]struct{}{}
-	for _, p := range in.Products {
-		if _, ok := updatedProducts[p.Product.UUID]; ok {
-			continue
-		}
-		updatedProducts[p.Product.UUID] = struct{}{}
-
-		inventoryProduct := in.InventoryProducts[p.Product.UUID]
-		requestedQuantity := requestedQuantities[p.Product.UUID]
-		err := sg.inventoryService.UpdateProduct(
-			in.InventoryUUID,
-			inventoryProduct.ProductUUID,
-			inventoryProduct.Stock,
-			inventoryProduct.VirtualStock-requestedQuantity,
-		)
+		err := sg.inventoryService.UpdateProduct(i.InventoryUUID, i.ProductUUID, i.Stock, i.VirtualStock-i.Stock-p.Quantity)
 		if err != nil {
 			return err
 		}
 
-		currentInventoryProduct := inventoryProduct
 		sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
-			return sg.inventoryService.UpdateProduct(
-				in.InventoryUUID,
-				currentInventoryProduct.ProductUUID,
-				currentInventoryProduct.Stock,
-				currentInventoryProduct.VirtualStock,
-			)
+			return sg.inventoryService.UpdateProduct(i.InventoryUUID, i.ProductUUID, i.Stock, i.VirtualStock)
 		}))
 	}
 

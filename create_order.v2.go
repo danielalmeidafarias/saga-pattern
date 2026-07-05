@@ -55,53 +55,36 @@ Enquanto nosso servico iria simplesmente gravar ids das tarefas que poderiam ser
 func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, error) {
 	sagaOrchestrator := NewSagaOrchestrator()
 
-	if _, err := uc.inventoryService.Get(in.InventoryUUID); err != nil {
-		return &sagaOrchestrator, err
-	}
-
-	requestedQuantities := map[string]int{}
+	var inventoryProductList = make(map[OrderProduct]InventoryProduct)
 	for _, p := range in.Products {
-		requestedQuantities[p.Product.UUID] += p.Quantity
-	}
-
-	validatedProducts := map[string]struct{}{}
-	for _, p := range in.Products {
-		if _, ok := validatedProducts[p.Product.UUID]; ok {
-			continue
-		}
-		validatedProducts[p.Product.UUID] = struct{}{}
-
-		product, err := uc.productService.Get(p.Product.UUID)
-		if err != nil {
-			return &sagaOrchestrator, err
-		}
-
 		inventoryProduct, err := uc.inventoryService.GetProduct(in.InventoryUUID, p.Product.UUID)
 		if err != nil {
 			return &sagaOrchestrator, err
 		}
 
-		requestedQuantity := requestedQuantities[p.Product.UUID]
-		if inventoryProduct.VirtualStock < requestedQuantity {
-			return &sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", product.Name)
+		if inventoryProduct.VirtualStock < p.Quantity {
+			return &sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", p.Product.Name)
 		}
 
-		currentInventoryProduct := inventoryProduct
+		inventoryProductList[p] = inventoryProduct
+	}
+
+	for p, i := range inventoryProductList {
 		sagaOrchestrator.AddStep(NewSagaStep(
 			func() error {
 				return uc.inventoryService.UpdateProduct(
-					in.InventoryUUID,
-					currentInventoryProduct.ProductUUID,
-					currentInventoryProduct.Stock,
-					currentInventoryProduct.VirtualStock-requestedQuantity,
+					i.InventoryUUID,
+					i.ProductUUID,
+					i.Stock,
+					i.VirtualStock-p.Quantity,
 				)
 			},
 			func() error {
 				return uc.inventoryService.UpdateProduct(
-					in.InventoryUUID,
-					currentInventoryProduct.ProductUUID,
-					currentInventoryProduct.Stock,
-					currentInventoryProduct.VirtualStock,
+					i.InventoryUUID,
+					i.ProductUUID,
+					i.Stock,
+					i.VirtualStock,
 				)
 			},
 		))
