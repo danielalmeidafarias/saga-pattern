@@ -120,19 +120,21 @@ func (sg *CreateOrderSagaOrchestrator) Run(in CreateOrderSagaOrchestratorInput) 
 
 	paymentUUID, err := sg.paymentService.Create(in.Amount)
 	if err != nil {
-		sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
-			return sg.paymentService.Cancel(paymentUUID)
-		}))
 		return err
 	}
 
+	sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
+		return sg.paymentService.Cancel(paymentUUID)
+	}))
+
 	shippingUUID, err := sg.shippingService.Create(paymentUUID)
 	if err != nil {
-		sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
-			return sg.shippingService.Cancel(shippingUUID)
-		}))
 		return err
 	}
+
+	sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
+		return sg.shippingService.Cancel(shippingUUID)
+	}))
 
 	orderUUID, err := sg.orderService.Create(Order{
 		Products:     in.Products,
@@ -142,11 +144,12 @@ func (sg *CreateOrderSagaOrchestrator) Run(in CreateOrderSagaOrchestratorInput) 
 		Amount:       in.Amount,
 	})
 	if err != nil {
-		sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
-			return sg.orderService.Cancel(orderUUID)
-		}))
 		return err
 	}
+
+	sg.RollbackStepList = append(sg.RollbackStepList, NewRollBackStep(func() error {
+		return sg.orderService.Cancel(orderUUID)
+	}))
 
 	return nil
 }
