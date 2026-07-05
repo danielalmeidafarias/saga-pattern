@@ -55,30 +55,56 @@ Enquanto nosso servico iria simplesmente gravar ids das tarefas que poderiam ser
 func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, error) {
 	sagaOrchestrator := NewSagaOrchestrator()
 
+	if _, err := uc.inventoryService.Get(in.InventoryUUID); err != nil {
+		return &sagaOrchestrator, err
+	}
+
+	requestedQuantities := map[string]int{}
 	for _, p := range in.Products {
+		requestedQuantities[p.Product.UUID] += p.Quantity
+	}
+
+	validatedProducts := map[string]struct{}{}
+	for _, p := range in.Products {
+		if _, ok := validatedProducts[p.Product.UUID]; ok {
+			continue
+		}
+		validatedProducts[p.Product.UUID] = struct{}{}
+
 		product, err := uc.productService.Get(p.Product.UUID)
 		if err != nil {
 			return &sagaOrchestrator, err
 		}
 
-		inventory, err := uc.inventoryService.Get(in.InventoryUUID)
+		inventoryProduct, err := uc.inventoryService.GetProduct(in.InventoryUUID, p.Product.UUID)
 		if err != nil {
 			return &sagaOrchestrator, err
 		}
 
-		if inventory.VirtualStock < p.Quantity {
+		requestedQuantity := requestedQuantities[p.Product.UUID]
+		if inventoryProduct.VirtualStock < requestedQuantity {
 			return &sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", product.Name)
 		}
 
+		currentInventoryProduct := inventoryProduct
 		sagaOrchestrator.AddStep(NewSagaStep(
 			func() error {
-				return uc.inventoryService.Update(in.InventoryUUID, inventory.Stock, inventory.VirtualStock-p.Quantity)
+				return uc.inventoryService.UpdateProduct(
+					in.InventoryUUID,
+					currentInventoryProduct.ProductUUID,
+					currentInventoryProduct.Stock,
+					currentInventoryProduct.VirtualStock-requestedQuantity,
+				)
 			},
 			func() error {
-				return uc.inventoryService.Update(in.InventoryUUID, inventory.Stock, inventory.VirtualStock)
+				return uc.inventoryService.UpdateProduct(
+					in.InventoryUUID,
+					currentInventoryProduct.ProductUUID,
+					currentInventoryProduct.Stock,
+					currentInventoryProduct.VirtualStock,
+				)
 			},
 		))
-
 	}
 
 	var amount float64

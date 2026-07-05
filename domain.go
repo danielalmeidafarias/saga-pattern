@@ -117,17 +117,22 @@ type IProductService interface {
 }
 
 type Inventory struct {
-	Id           string
-	UUID         string
-	ProductUUID  string
-	Stock        int
-	VirtualStock int
+	Id   string
+	UUID string
+}
+
+type InventoryProduct struct {
+	InventoryUUID string
+	ProductUUID   string
+	Stock         int
+	VirtualStock  int
 }
 
 type IInventoryService interface {
-	Create(productUUID string, stock int) error
+	Create(inventoryId string) error
 	Get(inventoryUUID string) (Inventory, error)
-	Update(inventoryUUID string, stock int, virtualStock int) error
+	GetProduct(inventoryUUID string, productUUID string) (InventoryProduct, error)
+	UpdateProduct(inventoryUUID string, productUUID string, stock int, virtualStock int) error
 }
 
 // Shipping

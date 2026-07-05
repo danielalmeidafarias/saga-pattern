@@ -5,18 +5,18 @@ import (
 	"testing"
 )
 
-func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
+func TestCreateOrderUseCasev1_Run_FailsAndRollsBack(t *testing.T) {
 	tests := []struct {
 		name      string
 		failAt    string
 		expectErr bool
-		check     func(t *testing.T, deps *testDeps)
+		check     func(t *testing.T, deps *testDepsV1)
 	}{
 		{
 			name:      "inventory-update",
 			failAt:    "inventory-update",
 			expectErr: true,
-			check: func(t *testing.T, deps *testDeps) {
+			check: func(t *testing.T, deps *testDepsV1) {
 				t.Helper()
 				if got := deps.inventory.items["inventory-1"]["product-1"].VirtualStock; got != 10 {
 					t.Fatalf("inventory should stay intact: got %d want %d", got, 10)
@@ -33,7 +33,7 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 			name:      "payment",
 			failAt:    "payment-create",
 			expectErr: true,
-			check: func(t *testing.T, deps *testDeps) {
+			check: func(t *testing.T, deps *testDepsV1) {
 				t.Helper()
 				if got := deps.inventory.items["inventory-1"]["product-1"].VirtualStock; got != 10 {
 					t.Fatalf("inventory not rolled back: got %d want %d", got, 10)
@@ -50,7 +50,7 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 			name:      "shipping",
 			failAt:    "shipping-create",
 			expectErr: true,
-			check: func(t *testing.T, deps *testDeps) {
+			check: func(t *testing.T, deps *testDepsV1) {
 				t.Helper()
 				if got := deps.inventory.items["inventory-1"]["product-1"].VirtualStock; got != 10 {
 					t.Fatalf("inventory not rolled back: got %d want %d", got, 10)
@@ -70,7 +70,7 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 			name:      "order",
 			failAt:    "order-create",
 			expectErr: true,
-			check: func(t *testing.T, deps *testDeps) {
+			check: func(t *testing.T, deps *testDepsV1) {
 				t.Helper()
 				if got := deps.inventory.items["inventory-1"]["product-1"].VirtualStock; got != 10 {
 					t.Fatalf("inventory not rolled back: got %d want %d", got, 10)
@@ -90,7 +90,7 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 			name:      "success",
 			failAt:    "",
 			expectErr: false,
-			check: func(t *testing.T, deps *testDeps) {
+			check: func(t *testing.T, deps *testDepsV1) {
 				t.Helper()
 				if got := deps.inventory.items["inventory-1"]["product-1"].VirtualStock; got != 8 {
 					t.Fatalf("inventory should be decremented: got %d want %d", got, 8)
@@ -118,8 +118,8 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			deps := newTestDeps(tt.failAt)
-			err := deps.uc.Run(CreateOrderInput{
+			deps := newTestDepsV1(tt.failAt)
+			err := deps.uc.Run(CreateOrderInputv1{
 				Products:      []OrderProduct{{Product: deps.product, Quantity: 2}},
 				InventoryUUID: "inventory-1",
 			})
@@ -135,9 +135,9 @@ func TestCreateOrderUseCase_Run_FailsAndRollsBack(t *testing.T) {
 	}
 }
 
-func TestCreateOrderUseCase_Run_ValidatesInventorySpecificProductStock(t *testing.T) {
+func TestCreateOrderUseCasev1_Run_ValidatesInventorySpecificProductStock(t *testing.T) {
 	product := Product{UUID: "product-1", Name: "Coffee", Price: 12.5}
-	deps := &testDeps{
+	deps := &testDepsV1{
 		product: product,
 		inventory: &memoryInventoryService{
 			inventories: map[string]Inventory{
@@ -153,11 +153,11 @@ func TestCreateOrderUseCase_Run_ValidatesInventorySpecificProductStock(t *testin
 				},
 			},
 		},
-		payment:  &memoryPaymentService{created: map[string]float64{}},
-		shipping: &memoryShippingService{created: map[string]string{}},
-		order:    &memoryOrderService{orders: map[string]Order{}},
+		payment:  &memoryPaymentServiceV1{},
+		shipping: &memoryShippingServiceV1{created: map[string]string{}},
+		order:    &memoryOrderServiceV1{orders: map[string]Order{}},
 	}
-	deps.uc = NewCreateOrderUseCase(
+	deps.uc = NewCreateOrderUseCasev1(
 		deps.order,
 		&memoryProductService{products: map[string]Product{"product-1": product}},
 		deps.inventory,
@@ -165,7 +165,7 @@ func TestCreateOrderUseCase_Run_ValidatesInventorySpecificProductStock(t *testin
 		deps.shipping,
 	)
 
-	err := deps.uc.Run(CreateOrderInput{
+	err := deps.uc.Run(CreateOrderInputv1{
 		Products:      []OrderProduct{{Product: deps.product, Quantity: 2}},
 		InventoryUUID: "inventory-1",
 	})
@@ -184,18 +184,18 @@ func TestCreateOrderUseCase_Run_ValidatesInventorySpecificProductStock(t *testin
 	}
 }
 
-type testDeps struct {
-	uc        IUseCase[CreateOrderInput]
+type testDepsV1 struct {
+	uc        IUseCase[CreateOrderInputv1]
 	product   Product
 	inventory *memoryInventoryService
-	payment   *memoryPaymentService
-	shipping  *memoryShippingService
-	order     *memoryOrderService
+	payment   *memoryPaymentServiceV1
+	shipping  *memoryShippingServiceV1
+	order     *memoryOrderServiceV1
 }
 
-func newTestDeps(failAt string) *testDeps {
+func newTestDepsV1(failAt string) *testDepsV1 {
 	product := Product{UUID: "product-1", Name: "Coffee", Price: 12.5}
-	deps := &testDeps{
+	deps := &testDepsV1{
 		product: product,
 		inventory: &memoryInventoryService{
 			failAt: failAt,
@@ -208,11 +208,11 @@ func newTestDeps(failAt string) *testDeps {
 				},
 			},
 		},
-		payment:  &memoryPaymentService{failAt: failAt, created: map[string]float64{}},
-		shipping: &memoryShippingService{failAt: failAt, created: map[string]string{}},
-		order:    &memoryOrderService{failAt: failAt, orders: map[string]Order{}},
+		payment:  &memoryPaymentServiceV1{failAt: failAt},
+		shipping: &memoryShippingServiceV1{failAt: failAt, created: map[string]string{}},
+		order:    &memoryOrderServiceV1{failAt: failAt, orders: map[string]Order{}},
 	}
-	deps.uc = NewCreateOrderUseCase(
+	deps.uc = NewCreateOrderUseCasev1(
 		deps.order,
 		&memoryProductService{failAt: failAt, products: map[string]Product{"product-1": product}},
 		deps.inventory,
@@ -222,132 +222,72 @@ func newTestDeps(failAt string) *testDeps {
 	return deps
 }
 
-type memoryProductService struct {
+type memoryPaymentServiceV1 struct {
 	failAt   string
-	products map[string]Product
-}
-
-func (m *memoryProductService) Create(productId string) error { return nil }
-
-func (m *memoryProductService) Get(productUUID string) (Product, error) {
-	if m.failAt == "product-get" {
-		return Product{}, errors.New("product not found")
-	}
-	product, ok := m.products[productUUID]
-	if !ok {
-		return Product{}, errors.New("product not found")
-	}
-	return product, nil
-}
-
-type memoryInventoryService struct {
-	failAt      string
-	inventories map[string]Inventory
-	items       map[string]map[string]InventoryProduct
-}
-
-func (m *memoryInventoryService) Create(inventoryId string) error { return nil }
-
-func (m *memoryInventoryService) Get(inventoryUUID string) (Inventory, error) {
-	if m.failAt == "inventory-get" {
-		return Inventory{}, errors.New("inventory not found")
-	}
-	inventory, ok := m.inventories[inventoryUUID]
-	if !ok {
-		return Inventory{}, errors.New("inventory not found")
-	}
-	return inventory, nil
-}
-
-func (m *memoryInventoryService) GetProduct(inventoryUUID string, productUUID string) (InventoryProduct, error) {
-	if m.failAt == "inventory-product-get" {
-		return InventoryProduct{}, errors.New("inventory product not found")
-	}
-	products, ok := m.items[inventoryUUID]
-	if !ok {
-		return InventoryProduct{}, errors.New("inventory product not found")
-	}
-	inventoryProduct, ok := products[productUUID]
-	if !ok {
-		return InventoryProduct{}, errors.New("inventory product not found")
-	}
-	return inventoryProduct, nil
-}
-
-func (m *memoryInventoryService) UpdateProduct(inventoryUUID string, productUUID string, stock int, virtualStock int) error {
-	if m.failAt == "inventory-update" {
-		return errors.New("inventory update failed")
-	}
-	products := m.items[inventoryUUID]
-	inventoryProduct := products[productUUID]
-	inventoryProduct.Stock = stock
-	inventoryProduct.VirtualStock = virtualStock
-	products[productUUID] = inventoryProduct
-	return nil
-}
-
-type memoryPaymentService struct {
-	failAt   string
-	created  map[string]float64
+	created  []float64
 	canceled []string
 }
 
-func (m *memoryPaymentService) Create(paymentUUID string, amount float64) error {
+func (m *memoryPaymentServiceV1) Create(amount float64) (string, error) {
 	if m.failAt == "payment-create" {
-		return errors.New("payment create failed")
+		return "", errors.New("payment create failed")
 	}
-	m.created[paymentUUID] = amount
-	return nil
+	paymentUUID := "payment-1"
+	m.created = append(m.created, amount)
+	return paymentUUID, nil
 }
 
-func (m *memoryPaymentService) Get(paymentUUID string) (Payment, error) {
+func (m *memoryPaymentServiceV1) Get(paymentUUID string) (Payment, error) {
 	return Payment{}, errors.New("payment not found")
 }
-func (m *memoryPaymentService) Process(paymentUUID string) error { return nil }
-func (m *memoryPaymentService) Cancel(paymentUUID string) error {
+func (m *memoryPaymentServiceV1) Process(paymentUUID string) error { return nil }
+func (m *memoryPaymentServiceV1) Cancel(paymentUUID string) error {
 	m.canceled = append(m.canceled, paymentUUID)
 	return nil
 }
-func (m *memoryPaymentService) Refund(paymentUUID string) error { return nil }
+func (m *memoryPaymentServiceV1) Refund(paymentUUID string) error { return nil }
 
-type memoryShippingService struct {
+type memoryShippingServiceV1 struct {
 	failAt   string
 	created  map[string]string
 	canceled []string
 }
 
-func (m *memoryShippingService) Create(shippingUUID, orderUUID string) error {
+func (m *memoryShippingServiceV1) Create(orderUUID string) (string, error) {
 	if m.failAt == "shipping-create" {
-		return errors.New("shipping create failed")
+		return "", errors.New("shipping create failed")
 	}
+	shippingUUID := "shipping-1"
 	m.created[shippingUUID] = orderUUID
-	return nil
+	return shippingUUID, nil
 }
 
-func (m *memoryShippingService) Get(shippingUUID string) (Shipping, error) {
+func (m *memoryShippingServiceV1) Get(shippingUUID string) (Shipping, error) {
 	return Shipping{}, errors.New("shipping not found")
 }
-func (m *memoryShippingService) Start(shippingUUID string) error   { return nil }
-func (m *memoryShippingService) Deliver(shippingUUID string) error { return nil }
-func (m *memoryShippingService) Cancel(shippingUUID string) error {
+func (m *memoryShippingServiceV1) Start(shippingUUID string) error   { return nil }
+func (m *memoryShippingServiceV1) Deliver(shippingUUID string) error { return nil }
+func (m *memoryShippingServiceV1) Cancel(shippingUUID string) error {
 	m.canceled = append(m.canceled, shippingUUID)
 	return nil
 }
 
-type memoryOrderService struct {
+type memoryOrderServiceV1 struct {
 	failAt string
 	orders map[string]Order
 }
 
-func (m *memoryOrderService) Create(order Order) error {
+func (m *memoryOrderServiceV1) Create(order Order) (string, error) {
 	if m.failAt == "order-create" {
-		return errors.New("order create failed")
+		return "", errors.New("order create failed")
 	}
-	m.orders[order.UUID] = order
-	return nil
+	orderUUID := "order-1"
+	order.UUID = orderUUID
+	m.orders[orderUUID] = order
+	return orderUUID, nil
 }
 
-func (m *memoryOrderService) Get(orderUUID string) (Order, error) {
+func (m *memoryOrderServiceV1) Get(orderUUID string) (Order, error) {
 	order, ok := m.orders[orderUUID]
 	if !ok {
 		return Order{}, errors.New("order not found")
@@ -355,5 +295,8 @@ func (m *memoryOrderService) Get(orderUUID string) (Order, error) {
 	return order, nil
 }
 
-func (m *memoryOrderService) Confirm(orderUUID string) error { return nil }
-func (m *memoryOrderService) Cancel(orderUUID string) error  { delete(m.orders, orderUUID); return nil }
+func (m *memoryOrderServiceV1) Confirm(orderUUID string) error { return nil }
+func (m *memoryOrderServiceV1) Cancel(orderUUID string) error {
+	delete(m.orders, orderUUID)
+	return nil
+}
