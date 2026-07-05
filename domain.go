@@ -1,16 +1,22 @@
 package main
 
-// ──────────────────────────────────────────────
+// UUID is service-to-service reference. Id stays local/internal.
+
 // Order
-// ──────────────────────────────────────────────
+
+type OrderProduct struct {
+	Product  Product
+	Quantity int
+}
 
 type Order struct {
-	Id         string
-	ProductId  string
-	PaymentId  string
-	ShippingId string
-	Amount     float64
-	Status     OrderStatus
+	Id           string
+	UUID         string
+	Products     []OrderProduct
+	PaymentUUID  string
+	ShippingUUID string
+	Amount       float64
+	Status       OrderStatus
 }
 
 type OrderStatus int
@@ -22,27 +28,35 @@ const (
 	OrderFailed
 )
 
-type IOderService interface {
-	Create(productsId []string, amount float64) (Order, error)
-	Get(orderId string) (Order, error)
-	Confirm(orderId string) error
-	Cancel(orderId string) error
+type IOderServiceV1 interface {
+	Create(order Order) (string, error)
+	Get(orderUUID string) (Order, error)
+	Confirm(orderUUID string) error
+	Cancel(orderUUID string) error
 }
 
-// ──────────────────────────────────────────────
+type IOderService interface {
+	Create(order Order) error
+	Get(orderUUID string) (Order, error)
+	Confirm(orderUUID string) error
+	Cancel(orderUUID string) error
+}
+
 // Payment
-// ──────────────────────────────────────────────
 
 type Payment struct {
-	Id       string
-	Status   PaymentStatus
-	RefundId *string
-	Amont    float64
-	Method   PaymentMethod
+	Id         string
+	UUID       string
+	Status     PaymentStatus
+	RefundId   *string
+	RefundUUID *string
+	Amont      float64
+	Method     PaymentMethod
 }
 
 type Refund struct {
 	Id     string
+	UUID   string
 	Status RefundStatus
 }
 
@@ -73,49 +87,56 @@ const (
 )
 
 type IPaymentService interface {
-	Create(amount float64) (Payment, error)
-	Get(paymentId string) (Payment, error)
-	Process(paymentId string) error
-	Cancel(paymentId string) error
-	Refund(paymentId string) error
+	Create(paymentUUID string, amount float64) error
+	Get(paymentUUID string) (Payment, error)
+	Process(paymentUUID string) error
+	Cancel(paymentUUID string) error
+	Refund(paymentUUID string) error
 }
 
-// ──────────────────────────────────────────────
+type IPaymentServiceV1 interface {
+	Create(amount float64) (string, error)
+	Get(paymentUUID string) (Payment, error)
+	Process(paymentUUID string) error
+	Cancel(paymentUUID string) error
+	Refund(paymentUUID string) error
+}
+
 // Inventory
-// ──────────────────────────────────────────────
 
 type Product struct {
 	Id    string
+	UUID  string
 	Name  string
 	Price float64
 }
 
 type IProductService interface {
-	Create(productId string) (Product, error)
-	Get(productId string) (Product, error)
+	Create(productId string) error
+	Get(productUUID string) (Product, error)
 }
 
 type Inventory struct {
 	Id           string
-	ProductId    string
+	UUID         string
+	ProductUUID  string
 	Stock        int
 	VirtualStock int
 }
 
 type IInventoryService interface {
-	Create(productId string, stock int) (Inventory, error)
-	Get(productId string) (Inventory, error)
-	Update(inventoryId string, stock int, virtualStock int) error
+	Create(productUUID string, stock int) error
+	Get(inventoryUUID string) (Inventory, error)
+	Update(inventoryUUID string, stock int, virtualStock int) error
 }
 
-// ──────────────────────────────────────────────
 // Shipping
-// ──────────────────────────────────────────────
 
 type Shipping struct {
-	Id      string
-	OrderId string
-	Status  ShippingStatus
+	Id        string
+	UUID      string
+	OrderUUID string
+	Status    ShippingStatus
 }
 
 type ShippingStatus int
@@ -129,14 +150,18 @@ const (
 	ShippingFailed
 )
 
-type IShippingService interface {
-	Create(orderId string) (Shipping, error)
-	Get(shippingId string) (Shipping, error)
-	Start(shippingId string) error
-	Deliver(shippingId string) error
-	Cancel(shippingId string) error
+type IShippingServiceV1 interface {
+	Create(orderUUID string) (string, error)
+	Get(shippingUUID string) (Shipping, error)
+	Start(shippingUUID string) error
+	Deliver(shippingUUID string) error
+	Cancel(shippingUUID string) error
 }
 
-type UseCase interface {
-	Run(input interface{}) error
+type IShippingService interface {
+	Create(shippingUUID, orderUUID string) error
+	Get(shippingUUID string) (Shipping, error)
+	Start(shippingUUID string) error
+	Deliver(shippingUUID string) error
+	Cancel(shippingUUID string) error
 }

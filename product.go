@@ -7,6 +7,6 @@ func (*ProductService) Create(productId string) (Product, error) {
 	return Product{}, nil
 }
 
-func (*ProductService) Get(productId string) (Product, error) {
+func (*ProductService) Get(productUUID string) (Product, error) {
 	return Product{}, nil
 }
