@@ -1,4 +1,4 @@
-package main
+package order
 
 import (
 	"fmt"
@@ -59,11 +59,11 @@ func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, er
 	for _, p := range in.Products {
 		inventoryProduct, err := uc.inventoryService.GetProduct(in.InventoryUUID, p.Product.UUID)
 		if err != nil {
-			return &sagaOrchestrator, err
+			return sagaOrchestrator, err
 		}
 
 		if inventoryProduct.VirtualStock < p.Quantity {
-			return &sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", p.Product.Name)
+			return sagaOrchestrator, fmt.Errorf("Requested product quantity not available for product: %s", p.Product.Name)
 		}
 
 		inventoryProductList[p] = inventoryProduct
@@ -137,5 +137,5 @@ func (uc CreateOrderUseCase) runFunc(in CreateOrderInput) (*SagaOrchestrator, er
 		},
 	))
 
-	return &sagaOrchestrator, sagaOrchestrator.Run()
+	return sagaOrchestrator, sagaOrchestrator.Run()
 }
