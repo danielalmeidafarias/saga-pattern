@@ -21,6 +21,12 @@ func NewCreateSagaUseCase(repository SagaRepository, resolver Resolver) *CreateS
 }
 
 func (uc *CreateSagaUseCase) Run(_ context.Context, in CreateSagaUseCaseInput) *pkg.Error {
+	if in.Message.SagaID == "" {
+		in.Message.SagaID = in.Message.ID
+	}
+	if in.Message.SagaID == "" {
+		return invalidSagaError("trigger must contain id")
+	}
 	steps, err := uc.resolver.Resolve(in.Message)
 	if err != nil {
 		return err

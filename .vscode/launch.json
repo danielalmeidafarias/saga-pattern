@@ -1,20 +1,61 @@
-﻿{
-	"version": "0.2.0",
-	"configurations": [
-		{
-			"name": "Debug create_order test",
-			"type": "go",
-			"request": "launch",
-			"mode": "test",
-			"program": "${workspaceFolder}",
-			"args": [
-				"-test.run",
-				"^TestCreateOrderUseCase_Run_RollsBackOnShippingFailure$",
-				"-test.v"
-			],
-			"env": {
-				"GOCACHE": "${workspaceFolder}\\.gocache"
-			}
-		}
-	]
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "E2E: todos os cenários",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}/test/e2e",
+      "preLaunchTask": "compose: subir ambiente",
+      "env": {
+        "E2E": "1",
+        "ORDER_URL": "http://localhost:8080",
+        "INVENTORY_URL": "http://localhost:8081",
+        "PAYMENT_URL": "http://localhost:8082",
+        "SHIPPING_URL": "http://localhost:8083",
+        "SAGA_URL": "http://localhost:8084"
+      },
+      "args": [
+        "-test.v",
+        "-test.run",
+        "^TestOrderSaga$"
+      ]
+    },
+    {
+      "name": "E2E: escolher cenário",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}/test/e2e",
+      "preLaunchTask": "compose: subir ambiente",
+      "env": {
+        "E2E": "1",
+        "ORDER_URL": "http://localhost:8080",
+        "INVENTORY_URL": "http://localhost:8081",
+        "PAYMENT_URL": "http://localhost:8082",
+        "SHIPPING_URL": "http://localhost:8083",
+        "SAGA_URL": "http://localhost:8084"
+      },
+      "args": [
+        "-test.v",
+        "-test.run",
+        "^TestOrderSaga$/${input:e2eScenario}"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "e2eScenario",
+      "type": "pickString",
+      "description": "Cenário E2E",
+      "options": [
+        "success",
+        "inventory_failure",
+        "payment_failure",
+        "shipping_failure"
+      ],
+      "default": "shipping_failure"
+    }
+  ]
 }

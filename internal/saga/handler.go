@@ -18,6 +18,9 @@ func NewHandler(createSaga *CreateSagaUseCase, orchestrator *SagaOrchestrator) *
 }
 
 func (h *Handler) HandleTrigger(ctx context.Context, message msg.Message) *pkg.Error {
+	if message.SagaID == "" {
+		message.SagaID = message.ID
+	}
 	if err := h.createSaga.Run(ctx, CreateSagaUseCaseInput{Message: message}); err != nil {
 		return err
 	}

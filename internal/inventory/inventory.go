@@ -3,6 +3,7 @@ package inventory
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/danielalmeidafarias/saga-pattern/pkg/db"
 )
@@ -15,6 +16,8 @@ const (
 	GetProductOperation    = "inventory.product.get"
 	UpdateProductOperation = "inventory.product.update"
 	DeleteProductOperation = "inventory.product.delete"
+	ReserveOperation       = "inventory.reserve"
+	ReleaseOperation       = "inventory.release"
 )
 
 type Inventory struct {
@@ -29,8 +32,22 @@ type Product struct {
 	VirtualStock  int
 }
 
+type ReservationStatus int
+
+const (
+	Reserved ReservationStatus = iota
+	Released
+)
+
+type Reservation struct {
+	UUID      string
+	OrderUUID string
+	Status    ReservationStatus
+}
+
 type Service struct {
 	database *sql.DB
+	mu       sync.RWMutex
 	failAt   string
 }
 
@@ -38,6 +55,7 @@ func NewService(database *sql.DB, failAt string) (*Service, error) {
 	if err := db.Migrate(database,
 		`CREATE TABLE IF NOT EXISTS inventories (id TEXT PRIMARY KEY, uuid TEXT UNIQUE NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS inventory_products (inventory_uuid TEXT NOT NULL, product_uuid TEXT NOT NULL, stock INTEGER NOT NULL, virtual_stock INTEGER NOT NULL, PRIMARY KEY (inventory_uuid, product_uuid))`,
+		`CREATE TABLE IF NOT EXISTS inventory_reservations (uuid TEXT PRIMARY KEY, order_uuid TEXT UNIQUE NOT NULL, status INTEGER NOT NULL)`,
 	); err != nil {
 		return nil, err
 	}
@@ -102,7 +120,37 @@ func (s *Service) DeleteProduct(inventoryUUID, productUUID string) error {
 	return resultError(result, err, "inventory product", inventoryUUID+"/"+productUUID)
 }
 
+func (s *Service) Reserve(reservation Reservation) error {
+	if err := s.fail(ReserveOperation); err != nil {
+		return err
+	}
+	_, err := s.database.Exec(`INSERT INTO inventory_reservations (uuid, order_uuid, status) VALUES (?, ?, ?) ON CONFLICT(order_uuid) DO UPDATE SET status = excluded.status`, reservation.UUID, reservation.OrderUUID, Reserved)
+	return err
+}
+
+func (s *Service) Release(orderUUID string) error {
+	if err := s.fail(ReleaseOperation); err != nil {
+		return err
+	}
+	result, err := s.database.Exec(`UPDATE inventory_reservations SET status = ? WHERE order_uuid = ?`, Released, orderUUID)
+	return resultError(result, err, "reservation", orderUUID)
+}
+
+func (s *Service) GetReservation(orderUUID string) (Reservation, error) {
+	var reservation Reservation
+	err := s.database.QueryRow(`SELECT uuid, order_uuid, status FROM inventory_reservations WHERE order_uuid = ?`, orderUUID).Scan(&reservation.UUID, &reservation.OrderUUID, &reservation.Status)
+	return reservation, err
+}
+
+func (s *Service) SetFailure(operation string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failAt = operation
+}
+
 func (s *Service) fail(operation string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.failAt == operation {
 		return fmt.Errorf("injected failure: %s", operation)
 	}

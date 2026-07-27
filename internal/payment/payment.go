@@ -3,6 +3,7 @@ package payment
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/danielalmeidafarias/saga-pattern/pkg/db"
 )
@@ -44,6 +45,7 @@ type Payment struct {
 
 type Service struct {
 	database *sql.DB
+	mu       sync.RWMutex
 	failAt   string
 }
 
@@ -91,6 +93,12 @@ func (s *Service) Process(uuid string) error { return s.setStatus(ProcessOperati
 func (s *Service) Cancel(uuid string) error  { return s.setStatus(CancelOperation, uuid, Failed) }
 func (s *Service) Refund(uuid string) error  { return s.setStatus(RefundOperation, uuid, Refunded) }
 
+func (s *Service) SetFailure(operation string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failAt = operation
+}
+
 func (s *Service) setStatus(operation, uuid string, status Status) error {
 	if err := s.fail(operation); err != nil {
 		return err
@@ -100,6 +108,8 @@ func (s *Service) setStatus(operation, uuid string, status Status) error {
 }
 
 func (s *Service) fail(operation string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.failAt == operation {
 		return fmt.Errorf("injected failure: %s", operation)
 	}

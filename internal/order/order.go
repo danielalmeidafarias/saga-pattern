@@ -3,6 +3,7 @@ package order
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/danielalmeidafarias/saga-pattern/pkg/db"
 )
@@ -44,6 +45,7 @@ type Order struct {
 
 type Service struct {
 	database *sql.DB
+	mu       sync.RWMutex
 	failAt   string
 }
 
@@ -137,6 +139,25 @@ func (s *Service) Delete(uuid string) error {
 func (s *Service) Confirm(uuid string) error { return s.setStatus(ConfirmOperation, uuid, Confirmed) }
 func (s *Service) Cancel(uuid string) error  { return s.setStatus(CancelOperation, uuid, Canceled) }
 
+func (s *Service) Complete(uuid, paymentUUID, shippingUUID string) error {
+	if err := s.fail(ConfirmOperation); err != nil {
+		return err
+	}
+	result, err := s.database.Exec(`UPDATE orders SET payment_uuid = ?, shipping_uuid = ?, status = ? WHERE uuid = ?`, paymentUUID, shippingUUID, Confirmed, uuid)
+	if err != nil {
+		return err
+	}
+	return requireOne(result, "order", uuid)
+}
+
+func (s *Service) Fail(uuid string) error { return s.setStatus(CancelOperation, uuid, Failed) }
+
+func (s *Service) SetFailure(operation string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failAt = operation
+}
+
 func (s *Service) setStatus(operation, uuid string, status Status) error {
 	if err := s.fail(operation); err != nil {
 		return err
@@ -149,6 +170,8 @@ func (s *Service) setStatus(operation, uuid string, status Status) error {
 }
 
 func (s *Service) fail(operation string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.failAt == operation {
 		return fmt.Errorf("injected failure: %s", operation)
 	}

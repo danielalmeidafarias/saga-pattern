@@ -1,6 +1,10 @@
 package saga
 
-import "github.com/danielalmeidafarias/saga-pattern/pkg/msg"
+import (
+	"encoding/json"
+
+	"github.com/danielalmeidafarias/saga-pattern/pkg/msg"
+)
 
 type Status string
 
@@ -39,4 +43,5 @@ type SagaStep struct {
 	Status       StepStatus
 	Command      msg.Message
 	Compensation *msg.Message
+	Result       json.RawMessage
 }

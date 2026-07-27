@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/danielalmeidafarias/saga-pattern/pkg"
+	"github.com/danielalmeidafarias/saga-pattern/pkg/contracts"
 	"github.com/danielalmeidafarias/saga-pattern/pkg/msg"
 )
 
@@ -14,7 +15,7 @@ func TestConsumerHandle_AcknowledgesSuccessfulHandler(t *testing.T) {
 	nacked := false
 
 	consumer.handle(context.Background(), []byte(`{"type":"order.created","version":1}`), func() { acked = true }, func() { nacked = true }, func(_ context.Context, message msg.Message) *pkg.Error {
-		if message.Type != msg.OrderCreatedMessage {
+		if message.Type != contracts.OrderCreated {
 			t.Fatalf("message type: got %s", message.Type)
 		}
 		return nil

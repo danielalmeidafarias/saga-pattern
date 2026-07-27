@@ -11,10 +11,11 @@ type SagaRepository interface {
 	Save(saga *Saga) *pkg.Error
 	FindByID(id string) (*Saga, *pkg.Error)
 	Update(saga *Saga) *pkg.Error
+	UpdateResult(saga *Saga, step *SagaStep) *pkg.Error
 	GetAll(filter GetAllSagaFilter) ([]Saga, *pkg.Error)
 }
 
 type SagaStepRepository interface {
-	FindByID(id string) (*SagaStep, *pkg.Error)
-	Update(step *SagaStep) *pkg.Error
+	FindStepByID(id string) (*SagaStep, *pkg.Error)
+	UpdateStep(step *SagaStep) *pkg.Error
 }

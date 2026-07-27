@@ -1,0 +1,107 @@
+x-service: &service
+  restart: unless-stopped
+  environment: &service-environment
+    PUBSUB_PROJECT_ID: saga-local
+    PUBSUB_EMULATOR_HOST: pubsub:8085
+  depends_on:
+    pubsub-bootstrap:
+      condition: service_completed_successfully
+
+services:
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=saga-local
+    ports: ["8085:8085"]
+
+  pubsub-bootstrap:
+    build:
+      context: .
+      args: {TARGET: pubsub-bootstrap}
+    environment: *service-environment
+    depends_on: [pubsub]
+
+  order-service:
+    <<: *service
+    build:
+      context: .
+      args: {TARGET: order-service}
+    environment:
+      <<: *service-environment
+      DATABASE_DSN: /data/order.db
+      HTTP_ADDR: :8080
+    ports: ["8080:8080"]
+    volumes: [order-data:/data]
+
+  inventory-service:
+    <<: *service
+    build:
+      context: .
+      args: {TARGET: inventory-service}
+    environment:
+      <<: *service-environment
+      DATABASE_DSN: /data/inventory.db
+      HTTP_ADDR: :8081
+    ports: ["8081:8081"]
+    volumes: [inventory-data:/data]
+
+  payment-service:
+    <<: *service
+    build:
+      context: .
+      args: {TARGET: payment-service}
+    environment:
+      <<: *service-environment
+      DATABASE_DSN: /data/payment.db
+      HTTP_ADDR: :8082
+    ports: ["8082:8082"]
+    volumes: [payment-data:/data]
+
+  shipping-service:
+    <<: *service
+    build:
+      context: .
+      args: {TARGET: shipping-service}
+    environment:
+      <<: *service-environment
+      DATABASE_DSN: /data/shipping.db
+      HTTP_ADDR: :8083
+    ports: ["8083:8083"]
+    volumes: [shipping-data:/data]
+
+  saga-orchestrator:
+    <<: *service
+    build:
+      context: .
+      args: {TARGET: saga-orchestrator}
+    environment:
+      <<: *service-environment
+      DATABASE_DSN: /data/saga.db
+      HTTP_ADDR: :8084
+    ports: ["8084:8084"]
+    volumes: [saga-data:/data]
+
+  e2e:
+    profiles: [test]
+    build:
+      context: .
+      target: e2e
+    environment:
+      E2E: "1"
+      ORDER_URL: http://order-service:8080
+      INVENTORY_URL: http://inventory-service:8081
+      PAYMENT_URL: http://payment-service:8082
+      SHIPPING_URL: http://shipping-service:8083
+      SAGA_URL: http://saga-orchestrator:8084
+    depends_on:
+      - order-service
+      - inventory-service
+      - payment-service
+      - shipping-service
+      - saga-orchestrator
+
+volumes:
+  order-data:
+  inventory-data:
+  payment-data:
+  shipping-data:
+  saga-data:

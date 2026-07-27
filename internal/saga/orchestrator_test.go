@@ -2,9 +2,11 @@ package saga
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/danielalmeidafarias/saga-pattern/pkg"
+	"github.com/danielalmeidafarias/saga-pattern/pkg/contracts"
 	"github.com/danielalmeidafarias/saga-pattern/pkg/msg"
 )
 
@@ -14,8 +16,8 @@ func TestSagaOrchestrator_AdvancesOnePhaseAtATime(t *testing.T) {
 		OrderID: "order-1",
 		Status:  StatusRunning,
 		StepList: []SagaStep{
-			step("step-1", 0, msg.ReserveInventoryMessage, msg.ReleaseInventoryMessage),
-			step("step-2", 1, msg.CreatePaymentMessage, msg.CancelPaymentMessage),
+			step("step-1", 0, contracts.ReserveInventoryRequested, contracts.ReleaseInventoryRequested),
+			step("step-2", 1, contracts.CreatePaymentRequested, contracts.CancelPaymentRequested),
 		},
 	})
 	publisher := &recordingPublisher{}
@@ -24,14 +26,14 @@ func TestSagaOrchestrator_AdvancesOnePhaseAtATime(t *testing.T) {
 	if err := orchestrator.Advance(context.Background(), "saga-1"); err != nil {
 		t.Fatalf("advance: %v", err)
 	}
-	assertPublished(t, publisher, 1, "step-1", msg.ReserveInventoryMessage)
+	assertPublished(t, publisher, 1, "step-1", contracts.ReserveInventoryRequested)
 	assertStepStatus(t, store, "step-1", StepDispatched)
 	assertStepStatus(t, store, "step-2", StepPending)
 
 	if err := orchestrator.HandleResult(context.Background(), success("saga-1", "step-1")); err != nil {
 		t.Fatalf("complete first step: %v", err)
 	}
-	assertPublished(t, publisher, 2, "step-2", msg.CreatePaymentMessage)
+	assertPublished(t, publisher, 2, "step-2", contracts.CreatePaymentRequested)
 	assertStepStatus(t, store, "step-1", StepSucceeded)
 
 	if err := orchestrator.HandleResult(context.Background(), success("saga-1", "step-2")); err != nil {
@@ -48,8 +50,8 @@ func TestSagaOrchestrator_CompensatesCompletedStepsInReverseOrder(t *testing.T) 
 		OrderID: "order-1",
 		Status:  StatusRunning,
 		StepList: []SagaStep{
-			step("step-1", 0, msg.ReserveInventoryMessage, msg.ReleaseInventoryMessage),
-			step("step-2", 1, msg.CreatePaymentMessage, msg.CancelPaymentMessage),
+			step("step-1", 0, contracts.ReserveInventoryRequested, contracts.ReleaseInventoryRequested),
+			step("step-2", 1, contracts.CreatePaymentRequested, contracts.CancelPaymentRequested),
 		},
 	})
 	publisher := &recordingPublisher{}
@@ -65,7 +67,7 @@ func TestSagaOrchestrator_CompensatesCompletedStepsInReverseOrder(t *testing.T) 
 		t.Fatalf("fail payment: %v", err)
 	}
 
-	assertPublished(t, publisher, 3, "step-1", msg.ReleaseInventoryMessage)
+	assertPublished(t, publisher, 3, "step-1", contracts.ReleaseInventoryRequested)
 	assertStepStatus(t, store, "step-1", StepCompensating)
 	assertStepStatus(t, store, "step-2", StepFailed)
 
@@ -78,15 +80,64 @@ func TestSagaOrchestrator_CompensatesCompletedStepsInReverseOrder(t *testing.T) 
 	}
 }
 
+func TestSagaOrchestrator_PublishesOrderCreationResultFromPersistedStepResults(t *testing.T) {
+	store := newMemoryStore(&Saga{
+		ID:      "saga-1",
+		OrderID: "order-1",
+		Trigger: contracts.OrderCreated,
+		Status:  StatusRunning,
+		StepList: []SagaStep{
+			step("step-1", 0, contracts.ReserveInventoryRequested, contracts.ReleaseInventoryRequested),
+			step("step-2", 1, contracts.CreatePaymentRequested, contracts.CancelPaymentRequested),
+			step("step-3", 2, contracts.CreateShippingRequested, contracts.CancelShippingRequested),
+		},
+	})
+	publisher := &recordingPublisher{}
+	orchestrator := NewSagaOrchestrator(&memorySagaRepository{store}, &memoryStepRepository{store}, publisher)
+
+	if err := orchestrator.Advance(context.Background(), "saga-1"); err != nil {
+		t.Fatalf("dispatch inventory: %v", err)
+	}
+	if err := orchestrator.HandleResult(context.Background(), success("saga-1", "step-1")); err != nil {
+		t.Fatalf("complete inventory: %v", err)
+	}
+	if err := orchestrator.HandleResult(context.Background(), successWithPayload("saga-1", "step-2", contracts.ResourceCreated{UUID: "payment-1"})); err != nil {
+		t.Fatalf("complete payment: %v", err)
+	}
+	publisher.failNext = true
+	if err := orchestrator.HandleResult(context.Background(), successWithPayload("saga-1", "step-3", contracts.ResourceCreated{UUID: "shipping-1"})); err == nil {
+		t.Fatal("complete shipping: expected completion publish failure")
+	}
+	if err := orchestrator.Advance(context.Background(), "saga-1"); err != nil {
+		t.Fatalf("retry completion publish: %v", err)
+	}
+
+	assertPublished(t, publisher, 4, "", contracts.OrderCreationSucceeded)
+	message := publisher.messages[3]
+	if message.Topic != "order-events" || message.OrderID != "order-1" {
+		t.Fatalf("completion message: got topic=%s orderId=%s", message.Topic, message.OrderID)
+	}
+	var payload contracts.OrderCreationSucceededPayload
+	if err := json.Unmarshal(message.Payload, &payload); err != nil {
+		t.Fatalf("decode completion message: %v", err)
+	}
+	if payload.PaymentUUID != "payment-1" || payload.ShippingUUID != "shipping-1" {
+		t.Fatalf("completion payload: got payment=%s shipping=%s", payload.PaymentUUID, payload.ShippingUUID)
+	}
+	if got := store.steps["step-2"].Result; string(got) != `{"uuid":"payment-1"}` {
+		t.Fatalf("payment result: got %s", got)
+	}
+}
+
 func TestSagaOrchestrator_DispatchesEveryStepInTheActivePhase(t *testing.T) {
 	store := newMemoryStore(&Saga{
 		ID:      "saga-1",
 		OrderID: "order-1",
 		Status:  StatusRunning,
 		StepList: []SagaStep{
-			step("step-1", 0, msg.ReserveInventoryMessage, msg.ReleaseInventoryMessage),
-			step("step-2", 0, msg.CreatePaymentMessage, msg.CancelPaymentMessage),
-			step("step-3", 1, msg.CreateShippingMessage, msg.CancelShippingMessage),
+			step("step-1", 0, contracts.ReserveInventoryRequested, contracts.ReleaseInventoryRequested),
+			step("step-2", 0, contracts.CreatePaymentRequested, contracts.CancelPaymentRequested),
+			step("step-3", 1, contracts.CreateShippingRequested, contracts.CancelShippingRequested),
 		},
 	})
 	publisher := &recordingPublisher{}
@@ -95,8 +146,8 @@ func TestSagaOrchestrator_DispatchesEveryStepInTheActivePhase(t *testing.T) {
 	if err := orchestrator.Advance(context.Background(), "saga-1"); err != nil {
 		t.Fatalf("advance first phase: %v", err)
 	}
-	assertPublished(t, publisher, 1, "step-1", msg.ReserveInventoryMessage)
-	assertPublished(t, publisher, 2, "step-2", msg.CreatePaymentMessage)
+	assertPublished(t, publisher, 1, "step-1", contracts.ReserveInventoryRequested)
+	assertPublished(t, publisher, 2, "step-2", contracts.CreatePaymentRequested)
 	assertStepStatus(t, store, "step-3", StepPending)
 
 	if err := orchestrator.HandleResult(context.Background(), success("saga-1", "step-1")); err != nil {
@@ -109,7 +160,7 @@ func TestSagaOrchestrator_DispatchesEveryStepInTheActivePhase(t *testing.T) {
 	if err := orchestrator.HandleResult(context.Background(), success("saga-1", "step-2")); err != nil {
 		t.Fatalf("complete second concurrent step: %v", err)
 	}
-	assertPublished(t, publisher, 3, "step-3", msg.CreateShippingMessage)
+	assertPublished(t, publisher, 3, "step-3", contracts.CreateShippingRequested)
 }
 
 func step(id string, phase int, command, compensation msg.MessageType) SagaStep {
@@ -127,15 +178,28 @@ func success(sagaID, stepID string) msg.Message {
 	return msg.Message{SagaID: sagaID, StepID: stepID}
 }
 
+func successWithPayload(sagaID, stepID string, payload any) msg.Message {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
+	}
+	return msg.Message{SagaID: sagaID, StepID: stepID, Payload: encoded}
+}
+
 func failure(sagaID, stepID string) msg.Message {
 	return msg.Message{SagaID: sagaID, StepID: stepID, Failure: &msg.Failure{Code: "FAILED", Message: "expected"}}
 }
 
 type recordingPublisher struct {
 	messages []msg.Message
+	failNext bool
 }
 
 func (p *recordingPublisher) Publish(_ context.Context, message msg.Message) *pkg.Error {
+	if p.failNext {
+		p.failNext = false
+		return pkg.NewError("PUBLISH_FAILED", "expected", nil)
+	}
 	p.messages = append(p.messages, message)
 	return nil
 }
@@ -180,6 +244,17 @@ func (r *memorySagaRepository) Update(saga *Saga) *pkg.Error {
 	return nil
 }
 
+func (r *memorySagaRepository) UpdateResult(saga *Saga, step *SagaStep) *pkg.Error {
+	r.store.sagas[saga.ID] = saga
+	r.store.steps[step.ID] = step
+	for i := range saga.StepList {
+		if saga.StepList[i].ID == step.ID {
+			saga.StepList[i] = *step
+		}
+	}
+	return nil
+}
+
 func (r *memorySagaRepository) GetAll(filter GetAllSagaFilter) ([]Saga, *pkg.Error) {
 	var sagas []Saga
 	for _, saga := range r.store.sagas {
@@ -192,7 +267,7 @@ func (r *memorySagaRepository) GetAll(filter GetAllSagaFilter) ([]Saga, *pkg.Err
 
 type memoryStepRepository struct{ store *memoryStore }
 
-func (r *memoryStepRepository) FindByID(id string) (*SagaStep, *pkg.Error) {
+func (r *memoryStepRepository) FindStepByID(id string) (*SagaStep, *pkg.Error) {
 	step, ok := r.store.steps[id]
 	if !ok {
 		return nil, pkg.NewError("NOT_FOUND", "step not found", nil)
@@ -200,7 +275,7 @@ func (r *memoryStepRepository) FindByID(id string) (*SagaStep, *pkg.Error) {
 	return step, nil
 }
 
-func (r *memoryStepRepository) Update(step *SagaStep) *pkg.Error {
+func (r *memoryStepRepository) UpdateStep(step *SagaStep) *pkg.Error {
 	r.store.steps[step.ID] = step
 	return nil
 }
